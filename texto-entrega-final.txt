@@ -1,0 +1,165 @@
+Proyecto de Base de Datos para Gestión Comercial
+
+Este proyecto busca desarrollar una base de datos para optimizar la gestión de un emprendimiento dedicado a la venta de productos como termos y vasos. Se diseñarán las siguientes tablas principales:
+
+1. Tablas Principales
+
+1.1 Ventas
+
+Registra cada venta realizada, incluyendo detalles como fecha, producto, cantidad, vendedor y cliente.
+
+1.2 Productos
+
+Contiene información sobre cada producto en stock, como nombre, descripción, precio de compra, precio de venta, proveedor y cantidad disponible.
+
+1.3 Proveedores
+
+Almacena los datos de contacto de los proveedores, así como información sobre los productos que suministran y los precios de compra.
+
+1.4 Vendedores
+
+Registra a cada vendedor, incluyendo datos personales y métricas de ventas.
+
+1.5 HechosVentas
+
+Tabla de hechos que almacena datos clave de cada venta (ID de la venta, producto, vendedor, cantidad e ingresos generados).
+
+1.6 TransaccionesStock
+
+Registra los cambios de stock de los productos debido a ventas o reposiciones.
+
+1.7 TransaccionesPagos
+
+Almacena los pagos recibidos de los clientes por las ventas realizadas.
+
+2. Vistas Creadas
+
+2.1 Vista: Vista_Proveedor_Ventas
+
+Descripción: Muestra la información de los proveedores y sus productos junto con los registros de ventas.
+
+Objetivo: Facilitar la consulta de los productos vendidos por cada proveedor.
+
+Tablas involucradas: Proveedores, Proveedor_Productos, Productos, Ventas.
+
+SELECT * FROM Vista_Proveedor_Ventas;
+
+2.2 Vista: re_stock
+
+Descripción: Muestra los productos junto con el contacto del proveedor y los detalles de ventas recientes.
+
+Objetivo: Facilitar la gestión del reabastecimiento de stock.
+
+Tablas involucradas: Proveedores, Proveedor_Productos, Productos, Ventas.
+
+SELECT * FROM re_stock;
+
+2.3 Vista: Resumen_Ventas_Mensual
+
+Descripción: Muestra el total de ventas agrupado por mes y año.
+
+Objetivo: Obtener reportes de ventas mensuales.
+
+Tablas involucradas: Ventas.
+
+SELECT * FROM Resumen_Ventas_Mensual;
+
+2.4 Vista: Stock_Actual_Productos
+
+Descripción: Muestra el stock disponible de cada producto junto con el proveedor correspondiente.
+
+Objetivo: Control de inventario y abastecimiento.
+
+Tablas involucradas: Productos, Proveedores, Proveedor_Productos.
+
+SELECT * FROM Stock_Actual_Productos;
+
+
+2.5 Vista: Ventas_Por_Vendedor
+
+Descripción: Muestra un resumen de las ventas realizadas por cada vendedor.
+
+Objetivo: Identificar el desempeño de cada vendedor.
+
+Tablas involucradas: Ventas, Vendedores.
+
+SELECT * FROM Ventas_Por_Vendedor;
+
+3. Funciones Personalizadas
+
+3.1 Función: Vendedor_Top_Ventas
+
+Descripción: Devuelve el nombre del vendedor con mayor monto de ventas.
+
+Objetivo: Identificar al vendedor con mejor desempeño.
+
+Tablas involucradas: Vendedores, Ventas.
+
+SELECT Vendedor_Top_Ventas();
+
+3.2 Función: Monto_Total_Ventas_Mes
+
+Descripción: Calcula el monto total vendido en un mes específico.
+
+Objetivo: Obtener reportes financieros mensuales.
+
+Tablas involucradas: Ventas.
+
+SELECT Monto_Total_Ventas_Mes(2024, 2);
+
+4. Stored Procedures
+
+4.1 Procedimiento: ObtenerVentasPorVendedor
+
+Descripción: Muestra todas las ventas de un vendedor en un rango de fechas.
+
+Objetivo: Generar reportes individuales de ventas.
+
+Tablas involucradas: Ventas, Productos.
+
+CALL ObtenerVentasPorVendedor(2, '2024-01-01', '2024-02-28');
+
+5. Triggers
+
+5.1 Trigger: restar_stock
+
+Descripción: Reduce automáticamente el stock de un producto cuando se registra una venta.
+
+Objetivo: Mantener actualizado el inventario.
+
+Tablas involucradas: Productos, Ventas.
+
+-- Código del trigger
+DELIMITER $$
+CREATE TRIGGER restar_stock
+AFTER INSERT ON Ventas
+FOR EACH ROW
+BEGIN
+    UPDATE Productos
+    SET Stock = Stock - NEW.Cantidad
+    WHERE ProductoID = NEW.ProductoID;
+END $$
+DELIMITER ;
+
+5.2 Trigger: registrar_transaccion_stock
+
+Descripción: Registra cada transacción de stock cuando se vende un producto.
+
+Objetivo: Llevar un control detallado de los cambios en el inventario.
+
+Tablas involucradas: TransaccionesStock, Ventas.
+
+CALL registrar_transaccion_stock();
+
+
+5.3 Trigger: registrar_pago
+
+Descripción: Inserta automáticamente un registro en la tabla de pagos cuando se realiza una venta.
+
+Objetivo: Control de ingresos por ventas.
+
+Tablas involucradas: TransaccionesPagos, Ventas.
+
+CALL registrar_pago();
+
+

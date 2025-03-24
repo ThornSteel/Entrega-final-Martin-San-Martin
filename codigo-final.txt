@@ -1,0 +1,282 @@
+CREATE TABLE Vendedores (
+    VendedorID INT PRIMARY KEY AUTO_INCREMENT,
+    Nombre VARCHAR(100) NOT NULL,
+    Contacto VARCHAR(100),
+    FechaIngreso DATE
+);
+
+CREATE TABLE Productos (
+    ProductoID INT PRIMARY KEY AUTO_INCREMENT,
+    NombreProducto VARCHAR(100) NOT NULL,
+    Stock INT NOT NULL,
+    PrecioUnitario DECIMAL(10, 2) NOT NULL
+);
+
+CREATE TABLE Proveedores (
+    ProveedorID INT PRIMARY KEY AUTO_INCREMENT,
+    NombreProveedor VARCHAR(100) NOT NULL,
+    Contacto VARCHAR(100)
+);
+
+CREATE TABLE Proveedor_Productos (
+    ProveedorID INT,
+    ProductoID INT,
+    PRIMARY KEY (ProveedorID, ProductoID),
+    FOREIGN KEY (ProveedorID) REFERENCES Proveedores(ProveedorID),
+    FOREIGN KEY (ProductoID) REFERENCES Productos(ProductoID)
+);
+
+CREATE TABLE Ventas (
+    VentaID INT PRIMARY KEY AUTO_INCREMENT,
+    Fecha DATE NOT NULL,
+    ProductoID INT NOT NULL,
+    Cantidad INT NOT NULL,
+    MontoTotal DECIMAL(10, 2) NOT NULL,
+    VendedorID INT NOT NULL,
+    FOREIGN KEY (ProductoID) REFERENCES Productos(ProductoID),
+    FOREIGN KEY (VendedorID) REFERENCES Vendedores(VendedorID)
+);
+
+CREATE VIEW Vista_Proveedor_Ventas AS
+SELECT 
+    p.ProveedorID, 
+    p.NombreProveedor, 
+    pr.NombreProducto, 
+    pr.Stock, 
+    v.VentaID
+FROM Proveedores p
+JOIN Proveedor_Productos pp ON p.ProveedorID = pp.ProveedorID
+JOIN Productos pr ON pp.ProductoID = pr.ProductoID
+LEFT JOIN Ventas v ON pr.ProductoID = v.ProductoID
+ORDER BY p.ProveedorID ASC, v.Fecha DESC;
+
+CREATE VIEW re_stock AS
+SELECT 
+    p.Contacto, 
+    pr.NombreProducto, 
+    pr.Stock, 
+    v.VentaID, 
+    v.MontoTotal
+FROM Proveedores p
+JOIN Proveedor_Productos pp ON p.ProveedorID = pp.ProveedorID
+JOIN Productos pr ON pp.ProductoID = pr.ProductoID
+LEFT JOIN Ventas v ON pr.ProductoID = v.ProductoID
+ORDER BY pr.NombreProducto ASC, v.Fecha DESC;
+
+
+SELECT * FROM Vista_Proveedor_Ventas;
+
+SELECT * FROM re_stock;
+
+INSERT INTO Vendedores (Nombre, Contacto, FechaIngreso) VALUES
+('Juan Pérez', 'juan.perez@email.com', '2022-01-15'),
+('María Gómez', 'maria.gomez@email.com', '2021-07-10'),
+('Carlos López', 'carlos.lopez@email.com', '2023-03-05'),
+('Ana Fernández', 'ana.fernandez@email.com', '2020-12-20'),
+('Pedro Martínez', 'pedro.martinez@email.com', '2019-06-25');
+
+INSERT INTO Productos (NombreProducto, Stock, PrecioUnitario) VALUES
+('Laptop HP', 20, 750.00),
+('Mouse Logitech', 50, 25.99),
+('Teclado Mecánico Redragon', 30, 45.50),
+('Monitor Samsung 24"', 15, 180.75),
+('Silla Gamer Corsair', 10, 350.00);
+
+INSERT INTO Proveedores (NombreProveedor, Contacto) VALUES
+('Tech Distribuidora', 'contacto@techdistribuidora.com'),
+('Electro Import', 'ventas@electroimport.com'),
+('Gamer Zone', 'info@gamerzone.com'),
+('Office Solutions', 'soporte@officesolutions.com'),
+('Distribuidora Digital', 'ventas@distribuidoradigital.com');
+
+INSERT INTO Proveedor_Productos (ProveedorID, ProductoID) VALUES
+(1, 1), -- Tech Distribuidora vende Laptop HP
+(2, 2), -- Electro Import vende Mouse Logitech
+(3, 3), -- Gamer Zone vende Teclado Mecánico Redragon
+(4, 4), -- Office Solutions vende Monitor Samsung
+(5, 5); -- Distribuidora Digital vende Silla Gamer
+
+
+INSERT INTO Ventas (Fecha, ProductoID, Cantidad, MontoTotal, VendedorID) VALUES
+('2024-02-15', 1, 2, 1500.00, 1), -- Juan Pérez vendió 2 Laptops HP
+('2024-02-16', 2, 5, 129.95, 2), -- María Gómez vendió 5 Mouse Logitech
+('2024-02-17', 3, 3, 136.50, 3), -- Carlos López vendió 3 Teclados Redragon
+('2024-02-18', 4, 1, 180.75, 4), -- Ana Fernández vendió 1 Monitor Samsung
+('2024-02-19', 5, 2, 700.00, 5); -- Pedro Martínez vendió 2 Sillas Gamer
+
+DELIMITER $$
+
+CREATE FUNCTION Vendedor_Top_Ventas() 
+RETURNS VARCHAR(100) DETERMINISTIC
+BEGIN
+    DECLARE MejorVendedor VARCHAR(100);
+
+    SELECT v.Nombre INTO MejorVendedor
+    FROM Vendedores v
+    JOIN Ventas ve ON v.VendedorID = ve.VendedorID
+    GROUP BY v.VendedorID
+    ORDER BY SUM(ve.MontoTotal) DESC
+    LIMIT 1;
+
+    RETURN MejorVendedor;
+END $$
+
+DELIMITER ;
+
+SELECT Vendedor_Top_Ventas();
+
+DELIMITER $$
+
+CREATE FUNCTION Monto_Total_Ventas_Mes(Año INT, Mes INT) 
+RETURNS DECIMAL(10,2) DETERMINISTIC
+BEGIN
+    DECLARE TotalVentas DECIMAL(10,2);
+
+    SELECT COALESCE(SUM(MontoTotal), 0) INTO TotalVentas
+    FROM Ventas
+    WHERE YEAR(Fecha) = Año AND MONTH(Fecha) = Mes;
+
+    RETURN TotalVentas;
+END $$
+
+DELIMITER ;
+
+
+SELECT Monto_Total_Ventas_Mes(2024, 2);
+
+DELIMITER $$
+
+CREATE TRIGGER restar_stock
+AFTER INSERT ON Ventas
+FOR EACH ROW
+BEGIN
+    UPDATE Productos
+    SET Stock = Stock - NEW.Cantidad
+    WHERE ProductoID = NEW.ProductoID;
+END $$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE PROCEDURE ObtenerVentasPorVendedor(
+    IN p_VendedorID INT,
+    IN p_FechaInicio DATE,
+    IN p_FechaFin DATE
+)
+BEGIN
+    SELECT v.VentaID, v.Fecha, p.NombreProducto, v.Cantidad, v.MontoTotal
+    FROM Ventas v
+    JOIN Productos p ON v.ProductoID = p.ProductoID
+    WHERE v.VendedorID = p_VendedorID 
+      AND v.Fecha BETWEEN p_FechaInicio AND p_FechaFin
+    ORDER BY v.Fecha DESC;
+END $$
+
+DELIMITER ;
+
+CALL ObtenerVentasPorVendedor(2, '2024-01-01', '2024-02-28');
+
+
+
+------------------------------------------------------------------------------
+
+
+
+CREATE TABLE HechosVentas (
+    HechoID INT PRIMARY KEY AUTO_INCREMENT,
+    VentaID INT,
+    ProductoID INT,
+    VendedorID INT,
+    CantidadVendida INT NOT NULL,
+    IngresoTotal DECIMAL(10,2) NOT NULL,
+    FechaVenta DATE NOT NULL,
+    FOREIGN KEY (VentaID) REFERENCES Ventas(VentaID),
+    FOREIGN KEY (ProductoID) REFERENCES Productos(ProductoID),
+    FOREIGN KEY (VendedorID) REFERENCES Vendedores(VendedorID)
+);
+
+CREATE TABLE TransaccionesStock (
+    TransaccionID INT PRIMARY KEY AUTO_INCREMENT,
+    ProductoID INT NOT NULL,
+    TipoTransaccion ENUM('Venta', 'Reposición') NOT NULL,
+    Cantidad INT NOT NULL,
+    FechaTransaccion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (ProductoID) REFERENCES Productos(ProductoID)
+);
+
+CREATE TABLE TransaccionesPagos (
+    PagoID INT PRIMARY KEY AUTO_INCREMENT,
+    VentaID INT NOT NULL,
+    MontoPagado DECIMAL(10,2) NOT NULL,
+    MetodoPago ENUM('Efectivo', 'Tarjeta', 'Transferencia') NOT NULL,
+    FechaPago TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (VentaID) REFERENCES Ventas(VentaID)
+);
+
+
+DELIMITER $$
+
+CREATE TRIGGER insertar_hechos_ventas
+AFTER INSERT ON Ventas
+FOR EACH ROW
+BEGIN
+    INSERT INTO HechosVentas (VentaID, ProductoID, VendedorID, CantidadVendida, IngresoTotal, FechaVenta)
+    VALUES (NEW.VentaID, NEW.ProductoID, NEW.VendedorID, NEW.Cantidad, NEW.MontoTotal, NEW.Fecha);
+END $$
+
+DELIMITER ;
+
+
+DELIMITER $$
+
+CREATE TRIGGER registrar_transaccion_stock
+AFTER INSERT ON Ventas
+FOR EACH ROW
+BEGIN
+    INSERT INTO TransaccionesStock (ProductoID, TipoTransaccion, Cantidad)
+    VALUES (NEW.ProductoID, 'Venta', NEW.Cantidad);
+END $$
+
+DELIMITER ;
+
+
+DELIMITER $$
+
+CREATE TRIGGER registrar_pago
+AFTER INSERT ON Ventas
+FOR EACH ROW
+BEGIN
+    INSERT INTO TransaccionesPagos (VentaID, MontoPagado, MetodoPago)
+    VALUES (NEW.VentaID, NEW.MontoTotal, 'Efectivo'); -- Por defecto en efectivo, se puede actualizar después
+END $$
+
+DELIMITER ;
+
+
+SELECT * FROM HechosVentas;
+
+INSERT INTO HechosVentas (Fecha, ProductoID, Cantidad, MontoTotal, VendedorID, ProveedorID)
+VALUES 
+('2024-03-20', 1, 2, 1500.00, 1, 1),
+('2024-03-21', 2, 3, 77.97, 2, 2),
+('2024-03-22', 3, 1, 45.50, 3, 3),
+('2024-03-23', 4, 2, 361.50, 4, 4);
+
+
+INSERT INTO TransaccionesStock (ProductoID, TipoTransaccion, Cantidad, Fecha, Descripcion)
+VALUES 
+(1, 'Venta', 2, '2024-03-20', 'Venta de Laptop HP'),
+(2, 'Venta', 3, '2024-03-21', 'Venta de Mouse Logitech'),
+(3, 'Venta', 1, '2024-03-22', 'Venta de Teclado Mecánico'),
+(4, 'Venta', 2, '2024-03-23', 'Venta de Monitor Samsung');
+
+
+INSERT INTO TransaccionesPagos (Fecha, ClienteID, Monto, MetodoPago, Descripcion)
+VALUES 
+('2024-03-20', 101, 1500.00, 'Tarjeta de Crédito', 'Pago por 2 Laptops HP'),
+('2024-03-21', 102, 77.97, 'Transferencia', 'Pago por 3 Mouse Logitech'),
+('2024-03-22', 103, 45.50, 'Efectivo', 'Pago por 1 Teclado Mecánico'),
+('2024-03-23', 104, 361.50, 'PayPal', 'Pago por 2 Monitores Samsung');
+
+
